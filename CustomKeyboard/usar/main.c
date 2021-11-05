@@ -31,7 +31,7 @@ UINT8 SP_KEY_CODE[10] = {0x00};  //temporily used for sepcial key
 
 UINT8 KEY_PRESS  [10] = {0x00};
 UINT8 LST_PRESS  [10] = {0x00};
-UINT8 KEY_MARCO  [10] = {0x00};
+UINT8 KEY_MARCO  [10] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
 
 UINT8X LAST_MEDIA_KEY = 0xff;
 UINT8X CUR_MEDIA_KEY = 0xff;
@@ -116,27 +116,13 @@ void HIDmediasend(){
 //	while(FLAG == 0); 
 }
 
-void HIDsendACK(UINT8 info){
-	User_Ep2Buf_send[0] = 0x55;
-	User_Ep2Buf_send[1] = 0x55;
-	User_Ep2Buf_send[2] = 0x55;
-	User_Ep2Buf_send[3] = info;
-	HIDsendMessage();
-	User_Ep2Buf_send[0] = 0x00;
-	User_Ep2Buf_send[1] = 0x00;
-	User_Ep2Buf_send[2] = 0x00;
-	User_Ep2Buf_send[3] = 0x00;
-}
+
 //send marco key
 void HIDmarco(UINT8 key_num){
 	UINT8 i,j,delay_n00ms;
 	//get key_num position
+	UINT8 key = 0x1E + key_num -1;
 	UINT8 pos = 0;
-	for(i=0;i<key_num;i++){
-		if(KEY_MARCO[i]==0xff){
-			pos++;
-		}
-	}
 	//init HIDKey[]
 	HIDKey[0] = 0x00;  //special key
 	HIDKey[1] = 0x00;  //reserved
@@ -148,41 +134,13 @@ void HIDmarco(UINT8 key_num){
 	HIDKey[7] = 0x00;
 	HIDKey[8] = 0x00;
 	//HIDKeysend();
-	for(i=0;i<(MARCO_SPLIT_INDX[pos]-MARCO_SPLIT_INDX[pos-1]);i++){
+	for(i=0;i<8;i++){
 		//prepare special key
 		delay_n00ms = 0;
 		HIDKey[0] = 0x00;
-		for(j=0;j<10;j++){
-			if(!(MARCO_SPE_KEYINDX[j]|MARCO_SPE_KEYCODE[j]))
-				break;
-			if(MARCO_SPE_KEYINDX[j]<MARCO_SPLIT_INDX[pos-1])
-				continue;
-			if(MARCO_SPE_KEYINDX[j]>MARCO_SPLIT_INDX[pos])
-				break;
-			if(MARCO_SPE_KEYINDX[j] == (MARCO_SPLIT_INDX[pos-1]+i)){
-				HIDKey[0] = MARCO_SPE_KEYCODE[j];
-				break;
-			}
-		}
-		//prepare delay
-		for(j=0;j<10;j++){
-			if(!(MARCO_DELAY_INDX[j]|MARCO_DELAY[j]))
-				break;
-			if(MARCO_DELAY_INDX[j]<MARCO_SPLIT_INDX[pos-1])
-				continue;
-			if(MARCO_DELAY_INDX[j]>MARCO_SPLIT_INDX[pos])
-				break;
-			if(MARCO_DELAY_INDX[j] == (MARCO_SPLIT_INDX[pos-1]+i)){
-				delay_n00ms = MARCO_DELAY[j];
-				break;
-			}
-		}
-		//send delay
-		MarcoDelay(delay_n00ms);
-		//send sp keys
-		
+
 		//prepare normal key
-		HIDKey [2] = MARCO_KEYCODE[MARCO_SPLIT_INDX[pos-1]+i];
+		HIDKey [2] = key;
 		Keyboard_Send();    //send keyboard event
 		while(FLAG == 0); 
 		//delay
@@ -229,9 +187,9 @@ void HIDmarcosend(){
 }
 //report key code to computer
 void HIDsend(){
-	HIDKeysend();
-	HIDMousesend();
-	HIDmediasend();
+	//HIDKeysend();
+	//HIDMousesend();
+	//HIDmediasend();
 	HIDmarcosend();
 }
 
@@ -483,123 +441,7 @@ void setMarco(unsigned char hi,unsigned char lo){
 }
 
 
-void handleReceive(){
-	if(HID_Rev != 0)
-	{
-		char i;
-		UINT8 temp[2];
-		HID_Rev = 0;
-		switch (User_Ep2Buf_rev[0]){
-			case 0x01:
-				//set_key_code
-				for(i = 0; i< 10 ;i++){
-				//copy normal key
-					KEY_CODE[i]=User_Ep2Buf_rev[1+i];
-				}
-				WriteDataFlash(0,KEY_CODE,10);
-				HIDsendACK(0x01);
-				break;
-			case 0x02:
-				for(i = 0; i< 10 ;i++){
-				//copy normal key
-					SP_KEY_CODE[i]=User_Ep2Buf_rev[1+i];
-				}
-				WriteDataFlash(10,SP_KEY_CODE,10);
-				HIDsendACK(0x02);
-				break;
-			case 0x03:
-				//set_marco_key
-				//get marco byte
-				temp[0] = User_Ep2Buf_rev[1];
-				temp[1] = User_Ep2Buf_rev[2];
-				setMarco(temp[0],temp[1]);
-				WriteDataFlash(20,temp,2);
-				HIDsendACK(0x03);
-				break;
-			case 0x04:
-				//set marco key
-				//get marco indeices
-			  for(i=0;i<11;i++){
-					MARCO_SPLIT_INDX[i] = User_Ep2Buf_rev[1+i];
-				}
-				WriteDataFlash(22,MARCO_SPLIT_INDX,11);
-				HIDsendACK(0x04);
-				break;
-			case 0x05:
-				//set marco key
-				//set sp-keys content
-				for(i=0;i<10;i++){
-					MARCO_SPE_KEYCODE[i] = User_Ep2Buf_rev[1+i];
-				}
-				WriteDataFlash(33,MARCO_SPE_KEYCODE,10);
-				HIDsendACK(0x05);
-				break;
-			case 0x06:
-				//set marco key
-				//set sp-keys indeices
-				for(i=0;i<10;i++){
-					MARCO_SPE_KEYINDX[i] = User_Ep2Buf_rev[1+i];
-				}
-				WriteDataFlash(43,MARCO_SPE_KEYINDX,10);
-				HIDsendACK(0x06);
-				break;
-			case 0x07:
-				//set marco key
-				//set marco key code
-				for(i=0;i<34;i++){
-					MARCO_KEYCODE[i] = User_Ep2Buf_rev[1+i];
-				}
-				WriteDataFlash(53,MARCO_KEYCODE,34);
-				HIDsendACK(0x07);
-				break;
-			case 0x08:
-				//set marco key
-				//set mouse key code
-				for(i=0;i<10;i++){
-					MOUSE_CODE[i] = User_Ep2Buf_rev[1+i];
-				}
-				WriteDataFlash(87,MOUSE_CODE,10);
-				HIDsendACK(0x08);
-				break;
-			case 0x09:
-				//set marco key
-				//set media key code
-				for(i=0;i<10;i++){
-					MEDIA_CODE[i] = User_Ep2Buf_rev[1+i];
-				}
-				WriteDataFlash(97,MEDIA_CODE,10);
-				HIDsendACK(0x09);
-				break;
-			case 0x0a:
-				//set marco key
-				//set delay key code
-				for(i=0;i<10;i++){
-					MARCO_DELAY[i] = User_Ep2Buf_rev[1+i];
-				}
-				WriteDataFlash(107,MARCO_DELAY,10);
-				HIDsendACK(0x0a);
-				break;
-			case 0x0b:
-				//set marco key
-				//set delay index key
-				for(i=0;i<10;i++){
-					MARCO_DELAY_INDX[i] = User_Ep2Buf_rev[1+i];
-				}
-				WriteDataFlash(117,MARCO_DELAY_INDX,10);
-				HIDsendACK(0x0b);
-				break;
-			case 0x0c:
-				//ack test
-				HIDsendACK(0x0c);
-				break;
-			case 0x0d:
-				User_Ep2Buf_send[0] = 0x01;
-				HIDsendMessage();
-				User_Ep2Buf_send[0] = 0x00;
-				break;
-		}
-	}
-}
+
 
 void initKeyValue(){
 	//read from data flash
@@ -636,7 +478,7 @@ void main(){
 	Ready = 0;
 	
 	USBDeviceInit();              //USB设备模式初始化
-	initKeyValue();              	//intialize key 
+	//initKeyValue();              	//intialize key 
 	
 	EA = 1;                       //允许单片机中断
 	//等待USB枚举成功
@@ -647,7 +489,7 @@ void main(){
 		{
 			scanKey();
 			HIDsend();
-			handleReceive();
+			//handleReceive();
 			FLAG = 0;
 		}
 	}
